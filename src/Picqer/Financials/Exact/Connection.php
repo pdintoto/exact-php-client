@@ -136,6 +136,11 @@ class Connection
     protected $minutelyLimitReset;
 
     /**
+     * @var bool
+     */
+    private $waitOnMinutelyRateLimitHit = false;
+
+    /**
      * @return Client
      */
     private function client()
@@ -250,6 +255,7 @@ class Connection
      */
     public function get($url, array $params = [], array $headers = [])
     {
+        $this->waitIfMinutelyRateLimitHit();
         $url = $this->formatUrl($url, $url !== 'current/Me', $url == $this->nextUrl);
 
         try {
@@ -272,6 +278,7 @@ class Connection
      */
     public function post($url, $body)
     {
+        $this->waitIfMinutelyRateLimitHit();
         $url = $this->formatUrl($url);
 
         try {
@@ -294,6 +301,7 @@ class Connection
      */
     public function put($url, $body)
     {
+        $this->waitIfMinutelyRateLimitHit();
         $url = $this->formatUrl($url);
 
         try {
@@ -315,6 +323,7 @@ class Connection
      */
     public function delete($url)
     {
+        $this->waitIfMinutelyRateLimitHit();
         $url = $this->formatUrl($url);
 
         try {
@@ -778,5 +787,25 @@ class Connection
         $this->minutelyLimit = (int) $response->getHeaderLine('X-RateLimit-Minutely-Limit');
         $this->minutelyLimitRemaining = (int) $response->getHeaderLine('X-RateLimit-Minutely-Remaining');
         $this->minutelyLimitReset = (int) $response->getHeaderLine('X-RateLimit-Minutely-Reset');
+    }
+
+    protected function waitIfMinutelyRateLimitHit()
+    {
+        if (! $this->waitOnMinutelyRateLimitHit) {
+            return;
+        }
+        
+        $minutelyReset = $this->getMinutelyLimitReset();
+        
+        if ($this->getMinutelyLimitRemaining() === 0 && $minutelyReset) {
+            // add a second for rounding differences
+            $resetsInSeconds = (($minutelyReset / 1000) - time()) + 1;
+            sleep($resetsInSeconds);
+        }
+    }
+
+    public function setWaitOnMinutelyRateLimitHit(bool $waitOnMinutelyRateLimitHit)
+    {
+        $this->waitOnMinutelyRateLimitHit = $waitOnMinutelyRateLimitHit;
     }
 }
